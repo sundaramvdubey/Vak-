@@ -1,0 +1,14 @@
+[package]
+name = "vak-lang"
+version = "0.1.0"
+edition = "2021"
+description = "Vāk language frontend foundation"
+license = "MIT"
+
+[lib]
+name = "vak"
+path = "src/lib.rs"
+
+[[bin]]
+name = "vak"
+path = "src/main.rs"

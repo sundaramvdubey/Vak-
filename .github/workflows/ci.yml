@@ -1,0 +1,28 @@
+name: Vāk CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions-rust-lang/setup-rust-toolchain@v1
+        with:
+          toolchain: stable
+      - name: Install LLVM and Clang
+        run: sudo apt-get update && sudo apt-get install -y llvm clang
+      - name: Format check
+        run: cargo fmt -- --check
+      - name: Rust tests
+        run: cargo test
+      - name: Validate generated LLVM
+        shell: bash
+        run: |
+          set -euo pipefail
+          for sample in native control aggregates for_range strings; do
+            cargo run --quiet -- emit "examples/${sample}.vak" "/tmp/${sample}.ll"
+            llvm-as "/tmp/${sample}.ll" -o "/tmp/${sample}.bc"
+          done

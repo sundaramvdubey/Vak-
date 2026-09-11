@@ -1,0 +1,6 @@
+fn main() {
+  let message: String = "hello, Vāk";
+  let numbers: [I32; 3] = [1, 2, 3];
+  let first: I32 = numbers[0];
+  if first == 1 { let confirmed: Bool = true; } else { let confirmed: Bool = false; }
+}

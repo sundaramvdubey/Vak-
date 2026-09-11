@@ -1,0 +1,11 @@
+struct Pair { left: I32, right: I32 }
+
+fn main() -> I32 {
+  let values: [I32; 3] = [1, 2, 3];
+  let mut total: I32 = values[0];
+  total = total + values[1];
+  let mut pair: Pair;
+  pair.left = total;
+  pair.right = values[2];
+  return pair.left + pair.right;
+}

@@ -1,0 +1,4 @@
+fn main() -> I32 {
+  print("hello from Vāk");
+  return 0;
+}
