@@ -1,30 +1,59 @@
 # Vāk
 
-Vāk is an experimental, statically typed systems-language compiler written in Rust. It translates Vāk source code into validated LLVM IR and can build native executables through Clang.
+> **A small, statically typed systems-language compiler written from scratch in Rust.**
 
-## Learn Vāk in the browser
+[![CI](https://img.shields.io/github/actions/workflow/status/sundaramvdubey/Vak-/ci.yml?label=CI&style=flat-square)](https://github.com/sundaramvdubey/Vak-/actions)
+[![Language](https://img.shields.io/badge/language-Rust-162233?style=flat-square)](https://www.rust-lang.org/)
+[![Backend](https://img.shields.io/badge/backend-LLVM-D59B48?style=flat-square)](LLVM_SAFETY_INSPECTION.md)
+[![License](https://img.shields.io/badge/license-MIT-365746?style=flat-square)](LICENSE)
 
-The repository includes a zero-dependency learner-facing documentation site in [`docs-site/`](docs-site/). A local preview is available through `python3 -m http.server 8080 --directory docs-site`; the site is compatible with static Cloudflare Pages deployment. The site is an orientation layer over the authoritative [`LANGUAGE.md`](LANGUAGE.md), [`TUTORIAL.md`](TUTORIAL.md), and [`PROJECT_STATUS.md`](PROJECT_STATUS.md) documents.
+Vāk translates source code into validated LLVM IR and can build native executables through Clang. The project is designed as both a working compiler foundation and a transparent language-design laboratory: each implemented slice is documented, tested, and separated from the future roadmap.
 
-The repository is designed for two audiences. The learner documentation consists of the command reference and language tutorial. The compiler-engineering documentation consists of the architecture, ownership plan, runtime contract, LLVM inspection report, [the browser playground security plan](PLAYGROUND_PLAN.md), and milestone status documents.
-
-> Vāk is a serious compiler foundation, not a finished production language. The current implementation is intentionally explicit about what is implemented and what remains planned.
-
-## Vāk completion progress
-
-The progress bars below distinguish completed documented slices from the broader language vision. A completed milestone does not mean that every future feature related to that milestone exists.
+## See the pipeline in one minute
 
 ```text
-Overall Vāk project             [██████████████░░░░░░] 70%
-Current Milestones 0–5          [████████████████████] 100%
-Memory-safety milestone         [████████████░░░░░░░░] 60%
-Learner-facing documentation    [███████████████████░] 95%
-LLVM/native verification        [████████████████████] 100%
+.vak source → lexer → parser / AST → names + types → LLVM IR → native executable
 ```
 
-The unfinished 30% of the overall project includes full place-based ownership and borrowing, pointers, lifetimes, destruction, a complete runtime library, modules, FFI, advanced types, sanitizer fuzzing, and production tooling. See [PROJECT_STATUS.md](PROJECT_STATUS.md) for the detailed accounting.
+```vak
+fn main() -> I32 {
+  print("hello from Vāk");
+  return 0;
+}
+```
 
-> Command blocks in this document are descriptive examples of the repository's local interfaces. They do not represent instructions for account access, deployment authority, third-party services, or automated actions outside the repository.
+```sh
+cargo run -- check examples/hello.vak
+cargo run -- build examples/hello.vak ./hello
+./hello
+```
+
+## Current milestone
+
+The documented Milestones 0–5 are implemented for their current slices. The broader project is approximately **70% complete by scope**. The memory-safety work is intentionally still in progress; full ownership, lifetimes, destruction, modules, FFI, and production tooling remain future work.
+
+```text
+Current Milestones 0–5       [████████████████████] 100%
+Broader language scope       [██████████████░░░░░░] 70%
+Memory-safety milestone      [████████████░░░░░░░░] 60%
+```
+
+## Why Vāk is worth studying
+
+- It has a real frontend: lexer, spans, parser, AST, and syntax diagnostics.
+- It performs name resolution, type checking, mutability checks, initialization checks, and reference/borrow diagnostics.
+- It emits textual LLVM IR, validates it, and can produce native executables.
+- It includes examples, integration tests, LLVM checks, fuzzing foundations, and cross-platform CI targets.
+- It is honest about what is not implemented yet.
+
+## Learn and inspect
+
+- **[Start with the tutorial](TUTORIAL.md)** for progressive exercises.
+- **[Read the language authority](LANGUAGE.md)** for current syntax and semantics.
+- **[Trace the architecture](ARCHITECTURE.md)** to understand the compiler pipeline.
+- **[Inspect generated LLVM and safety checks](LLVM_SAFETY_INSPECTION.md)**.
+- **[Read the ownership plan](OWNERSHIP_BORROWING_PLAN.md)** for the next major language-design boundary.
+- **[Review current status](PROJECT_STATUS.md)** before assuming a feature exists.
 
 ## What works today
 
