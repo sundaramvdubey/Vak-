@@ -32,7 +32,7 @@ A small CLI was added. `vak check <file.vak>` lexes, parses, and semantically an
 
 ## Verification performed
 
-The stable Rust, system linker, LLVM, and Clang toolchains were installed in the sandbox because they were not initially available. The project was formatted with `cargo fmt -- --check` and compiled with Cargo. The test suite contains thirteen library unit tests and eight integration tests, for a total of twenty-one passing tests.
+The stable Rust, system linker, LLVM, and Clang toolchains were installed in the sandbox because they were not initially available. The project was formatted with `cargo fmt -- --check` and compiled with Cargo. The test suite contains thirteen library unit tests and eleven integration tests, for a total of twenty-four passing tests.
 
 The tests verify source locations, representative lexer behavior, comments and literals, parser coverage for a representative surface program, malformed syntax handling, unterminated strings, and illegal-character diagnostics. The checked example `examples/hello.vak` parses successfully. A malformed temporary source file produces a source-located error and exits with status 1.
 
@@ -59,11 +59,11 @@ Milestone 2 is complete for the currently specified semantic surface. The next s
 
 The Milestone 5 slice is stable for the implemented loops and minimal string runtime. Remaining backend work should expand string and aggregate semantics only after the native path remains stable. No custom machine-code backend, linker, optimizer, or speculative IR should be introduced.
 
-The next engineering work should address exact semantic source spans, a real runtime library, ownership or borrowing design, richer diagnostics, executable fuzz targets, and release automation before adding broad language features.
+The next engineering work should address exact semantic source spans, move states and lexical borrow regions beyond explicit references, a real runtime library, richer diagnostics, executable fuzz targets, and release automation before adding broad language features.
 
 ## Completion estimate
 
-The explicitly enumerated Milestones 0 through 5 are implemented for their documented slices: **100% of the current milestone checklist**. The broader language project is approximately **68% complete by scope**, because the repository still lacks the ownership/pointer model, complete runtime and standard library, modules, FFI, advanced type rules, executable fuzzing, and production tooling. The new memory-safety slice itself is approximately **35% complete**: initialization joins, fixed-array bounds checks, mutability, and literal overflow checks exist, while ownership, aliasing, lifetimes, destruction, pointer safety, integer overflow, and complete path-sensitive dataflow remain unimplemented.
+The explicitly enumerated Milestones 0 through 5 are implemented for their documented slices: **100% of the current milestone checklist**. The broader language project is approximately **68% complete by scope**, because the repository still lacks the complete ownership/pointer model, complete runtime and standard library, modules, FFI, advanced type rules, executable fuzzing, and production tooling. The new memory-safety slice itself is approximately **45% complete**: initialization joins, fixed-array bounds checks, mutability, explicit references, shared-reference mutation rejection, reference-return rejection, and literal overflow checks exist, while move states, lexical borrow regions, lifetimes, destruction, pointer safety, integer overflow, and complete path-sensitive dataflow remain unimplemented.
 
 ```text
 Overall Vāk project          [█████████████░░░░░░░] 68%
@@ -75,7 +75,7 @@ LLVM/native verification     [████████████████�
 
 ## GitHub upload note
 
-The archive produced alongside this document contains source, documentation, examples, tests, Cargo metadata, and repository hygiene files. It excludes `.git`, `target`, generated binaries, and temporary files. Before publishing, create an initial GitHub commit with the project history and a CI workflow.
+The repository is now published at `https://github.com/sundaramvdubey/Vak-`; the latest pushed commit contains the explicit-reference implementation, native reference tests, and the Linux/macOS/Windows CI matrix.
 
 
 ## Current follow-up milestone
