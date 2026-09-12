@@ -64,16 +64,15 @@ jobs:
           $ErrorActionPreference = 'Stop'
           $out = Join-Path $env:RUNNER_TEMP 'vak-ci'
           New-Item -ItemType Directory -Force -Path $out | Out-Null
-          $llvmAs = 'C:\Program Files\LLVM\bin\llvm-as.exe'
-          $clang = 'C:\Program Files\LLVM\bin\clang.exe'
-          if (-not (Test-Path $llvmAs)) { throw "LLVM assembler not found at $llvmAs" }
-          if (-not (Test-Path $clang)) { throw "Clang not found at $clang" }
+          $clang = (Get-Command clang.exe -ErrorAction Stop).Source
           foreach ($sample in @('native', 'control', 'aggregates', 'for_range', 'strings', 'references')) {
             $ll = Join-Path $out "$sample.ll"
             $bc = Join-Path $out "$sample.bc"
             $exe = Join-Path $out "$sample.exe"
             cargo run --quiet -- emit "examples/$sample.vak" $ll
-            & $llvmAs $ll -o $bc
+            # Clang parses LLVM IR directly on Windows; this avoids assuming
+            # that the Chocolatey package exposes a separate llvm-as binary.
+            & $clang -x ir -c $ll -o $bc
             & $clang $ll -o $exe
             if ($LASTEXITCODE -ne 0) { throw "Native validation failed for $sample" }
           }
