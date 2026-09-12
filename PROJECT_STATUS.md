@@ -32,7 +32,7 @@ A small CLI was added. `vak check <file.vak>` lexes, parses, and semantically an
 
 ## Verification performed
 
-The stable Rust, system linker, LLVM, and Clang toolchains were installed in the sandbox because they were not initially available. The project was formatted with `cargo fmt -- --check` and compiled with Cargo. The test suite contains thirteen library unit tests and eleven integration tests, for a total of twenty-four passing tests.
+The stable Rust, system linker, LLVM, and Clang toolchains were installed in the sandbox because they were not initially available. The project was formatted with `cargo fmt -- --check` and compiled with Cargo. The test suite contains thirteen library unit tests and nineteen integration tests, for a total of thirty-two passing tests. The executable `cargo-fuzz` frontend target also compiles successfully.
 
 The tests verify source locations, representative lexer behavior, comments and literals, parser coverage for a representative surface program, malformed syntax handling, unterminated strings, and illegal-character diagnostics. The checked example `examples/hello.vak` parses successfully. A malformed temporary source file produces a source-located error and exits with status 1.
 
@@ -45,10 +45,10 @@ The following are intentionally deferred and should not be described as implemen
 1. Richer string operations and richer aggregate value semantics.
 2. A runtime or standard library.
 3. Modules and imports.
-4. Move semantics, lexical borrow regions, pointers, slices, ownership, destruction, lifetimes, and unsafe operations beyond the initial explicit-reference slice.
+4. Full move semantics, lexical borrow regions, pointers, slices, ownership, destruction, lifetimes, and unsafe operations beyond the initial explicit-reference foundation.
 5. C ABI declarations and linking.
 6. C++ interoperability tooling.
-7. Executable fuzzing infrastructure; preparation guidance and corpus planning now exist.
+7. Long fuzz campaigns, sanitizer automation, and corpus management; an executable `cargo-fuzz` frontend target and bounded smoke instructions now exist.
 8. Generics, algebraic data types, pattern matching, concurrency, async I/O, package management, LSP, formatter, debugger integration, cross-compilation, WebAssembly, and self-hosting.
 
 The current parser and analyzer still defer loop/path-sensitive initialization beyond conservative joins, advanced numeric inference, explicit conversion semantics, and complete aggregate move/copy rules. These rules must be finalized before they are expanded.
@@ -59,16 +59,16 @@ Milestone 2 is complete for the currently specified semantic surface. The next s
 
 The Milestone 5 slice is stable for the implemented loops and minimal string runtime. Remaining backend work should expand string and aggregate semantics only after the native path remains stable. No custom machine-code backend, linker, optimizer, or speculative IR should be introduced.
 
-The next engineering work should address exact semantic source spans, move states and lexical borrow regions beyond explicit references, a real runtime library, richer diagnostics, executable fuzz targets, and release automation before adding broad language features.
+The next engineering work should address full AST span propagation, move states and lexical borrow regions beyond the conservative explicit-reference foundation, a real versioned runtime library, richer diagnostics, long-running sanitizer fuzz campaigns, and release automation before adding broad language features.
 
 ## Completion estimate
 
-The explicitly enumerated Milestones 0 through 5 are implemented for their documented slices: **100% of the current milestone checklist**. The broader language project is approximately **68% complete by scope**, because the repository still lacks the complete ownership/pointer model, complete runtime and standard library, modules, FFI, advanced type rules, executable fuzzing, and production tooling. The new memory-safety slice itself is approximately **45% complete**: initialization joins, fixed-array bounds checks, mutability, explicit references, shared-reference mutation rejection, reference-return rejection, and literal overflow checks exist, while move states, lexical borrow regions, lifetimes, destruction, pointer safety, integer overflow, and complete path-sensitive dataflow remain unimplemented.
+The explicitly enumerated Milestones 0 through 5 are implemented for their documented slices: **100% of the current milestone checklist**. The broader language project is approximately **70% complete by scope**, because the repository still lacks the complete ownership/pointer model, complete runtime and standard library, modules, FFI, advanced type rules, sanitizer fuzzing, and production tooling. The new memory-safety slice itself is approximately **60% complete**: initialization joins, fixed-array bounds checks, mutability, explicit references, basic move states for non-copy values, borrow conflict checks, reference-return rejection, source-aware ownership diagnostics, and literal overflow checks exist, while full place analysis, non-lexical lifetimes, destruction, pointer safety, integer overflow, and complete path-sensitive dataflow remain unimplemented.
 
 ```text
-Overall Vāk project          [█████████████░░░░░░░] 68%
+Overall Vāk project          [██████████████░░░░░░] 70%
 Milestones 0–5               [████████████████████] 100%
-Memory safety                [█████████░░░░░░░░░░░] 45%
+Memory safety                [████████████░░░░░░░░] 60%
 Learner documentation        [███████████████████░] 95%
 LLVM/native verification     [████████████████████] 100%
 ```

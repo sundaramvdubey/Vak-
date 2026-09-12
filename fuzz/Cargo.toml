@@ -1,0 +1,19 @@
+[package]
+name = "vak-fuzz"
+version = "0.1.0"
+edition = "2021"
+publish = false
+
+[package.metadata]
+cargo-fuzz = true
+
+[dependencies]
+libfuzzer-sys = "0.4"
+vak = { package = "vak-lang", path = ".." }
+
+[[bin]]
+name = "frontend"
+path = "fuzz_targets/frontend.rs"
+test = false
+doc = false
+bench = false

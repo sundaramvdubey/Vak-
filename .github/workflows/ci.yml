@@ -50,10 +50,17 @@ jobs:
           set -euo pipefail
           out="$RUNNER_TEMP/vak-ci"
           mkdir -p "$out"
+          llvm_as="llvm-as"
+          clang_bin="clang"
+          if [[ "$RUNNER_OS" == "Windows" ]]; then
+            export PATH="/c/Program Files/LLVM/bin:$PATH"
+            llvm_as="llvm-as.exe"
+            clang_bin="clang.exe"
+          fi
           for sample in native control aggregates for_range strings references; do
             cargo run --quiet -- emit "examples/${sample}.vak" "$out/${sample}.ll"
-            llvm-as "$out/${sample}.ll" -o "$out/${sample}.bc"
+            "$llvm_as" "$out/${sample}.ll" -o "$out/${sample}.bc"
             executable="$out/${sample}"
             if [[ "$RUNNER_OS" == "Windows" ]]; then executable="${executable}.exe"; fi
-            clang "$out/${sample}.ll" -o "$executable"
+            "$clang_bin" "$out/${sample}.ll" -o "$executable"
           done

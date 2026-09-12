@@ -1,5 +1,5 @@
 use std::{env, fs, process};
-use vak::{analyze, generate_llvm, parse_source};
+use vak::{analyze_with_source, generate_llvm, parse_source};
 
 fn usage() {
     println!("Vāk compiler 0.1.0\n");
@@ -52,18 +52,24 @@ fn main() {
         Err(errors) => {
             for e in errors {
                 eprintln!(
-                    "error: {path}:{}:{}: {}",
-                    e.span.line, e.span.column, e.message
+                    "error{}: {path}:{}:{}: {}",
+                    e.code.map(|code| format!("[{code}]")).unwrap_or_default(),
+                    e.span.line,
+                    e.span.column,
+                    e.message
                 );
             }
             process::exit(1);
         }
     };
-    if let Err(errors) = analyze(&program) {
+    if let Err(errors) = analyze_with_source(&program, &source) {
         for e in errors {
             eprintln!(
-                "error: {path}:{}:{}: {}",
-                e.span.line, e.span.column, e.message
+                "error{}: {path}:{}:{}: {}",
+                e.code.map(|code| format!("[{code}]")).unwrap_or_default(),
+                e.span.line,
+                e.span.column,
+                e.message
             );
         }
         process::exit(1);

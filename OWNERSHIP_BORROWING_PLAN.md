@@ -1,8 +1,8 @@
 # Vāk Ownership and Borrowing Model Plan
 
-**Author:** Manus AI  
-**Status:** Proposed design for the next memory-safety milestone  
-**Current implementation baseline:** Vāk has value semantics, compiler-managed local storage, definite-initialization checks, mutability checks, and fixed-array runtime bounds traps. It does not yet have pointers, references, ownership, lifetimes, heap allocation, destruction, or unsafe syntax.
+**Author:** Manus AI
+**Status:** Partially implemented Priority 0 foundation
+**Current implementation baseline:** Vāk has value semantics, compiler-managed local storage, definite-initialization checks, mutability checks, fixed-array runtime bounds traps, explicit `&T`/`&mut T` references, dereference lowering, move states for non-copy values, borrow-conflict checks, lexical temporary borrow cleanup, and structured ownership diagnostics. It does not yet have full place-based aggregate moves, non-lexical lifetime inference, heap allocation, destruction, or unsafe syntax.
 
 ## Executive conclusion
 

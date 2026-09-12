@@ -15,14 +15,14 @@ The repository is designed for two audiences. A learner can start with the quick
 The progress bars below distinguish completed documented slices from the broader language vision. A completed milestone does not mean that every future feature related to that milestone exists.
 
 ```text
-Overall Vāk project             [█████████████░░░░░░░] 68%
+Overall Vāk project             [██████████████░░░░░░] 70%
 Current Milestones 0–5          [████████████████████] 100%
-Memory-safety milestone         [███████░░░░░░░░░░░░░] 35%
+Memory-safety milestone         [████████████░░░░░░░░] 60%
 Learner-facing documentation    [███████████████████░] 95%
 LLVM/native verification        [███████████████████░] 95%
 ```
 
-The unfinished 32% of the overall project includes ownership and borrowing, pointers, lifetimes, destruction, a complete runtime library, modules, FFI, advanced types, executable fuzzing, and production tooling. See [PROJECT_STATUS.md](PROJECT_STATUS.md) for the detailed accounting.
+The unfinished 30% of the overall project includes full place-based ownership and borrowing, pointers, lifetimes, destruction, a complete runtime library, modules, FFI, advanced types, sanitizer fuzzing, and production tooling. See [PROJECT_STATUS.md](PROJECT_STATUS.md) for the detailed accounting.
 
 ## What works today
 
@@ -37,9 +37,9 @@ The current compiler supports the following language and compiler features:
 | Data | `Bool`, `I32`, `U32`, `U64`, `F64`, `String`, fixed arrays, simple structs, `&T` and `&mut T` reference parameters |
 | Backend | Textual LLVM IR generation, LLVM validation, Clang native builds |
 | Runtime slice | String literals and `print(String)` through libc `puts` |
-| Tests | Rust unit tests, integration tests, native reference tests, LLVM assembly validation, native examples |
+| Tests | Rust unit tests, 19 integration tests, ownership/diagnostic tests, native reference tests, LLVM assembly validation, native examples |
 
-Move semantics, lexical borrow regions, pointers, lifetimes, destruction, modules, a complete runtime library, generics, FFI, and production tooling remain planned. The first explicit reference slice is implemented and documented in [OWNERSHIP_BORROWING_PLAN.md](OWNERSHIP_BORROWING_PLAN.md). See [PROJECT_STATUS.md](PROJECT_STATUS.md) for the current completion estimate.
+Full place-based move semantics, lexical lifetime inference, pointers, destruction, modules, a complete runtime library, generics, FFI, and production tooling remain planned. The initial move/borrow foundation is implemented and documented in [OWNERSHIP_BORROWING_PLAN.md](OWNERSHIP_BORROWING_PLAN.md). See [PROJECT_STATUS.md](PROJECT_STATUS.md) for the current completion estimate.
 
 ## Quick start on Linux, macOS, or Windows
 
@@ -323,7 +323,7 @@ TUTORIAL.md                        Progressive learner exercises
 PROJECT_STATUS.md                  Implementation status and completion estimate
 ROADMAP.md                         Milestones and deferred work
 .github/workflows/ci.yml            GitHub Actions validation
-fuzz/README.md                     Fuzzing preparation notes
+fuzz/README.md                     Executable fuzz target and bounded smoke guidance
 ```
 
 ## Troubleshooting
@@ -363,7 +363,7 @@ Before submitting a change, update the language specification if semantics chang
 
 ## Honest limitations
 
-Vāk is not yet 100% complete. It does not currently implement ownership, borrowing, pointers, references, slices, lifetimes, destruction, heap allocation, a complete runtime, modules, imports, generics, pattern matching, FFI declarations, executable fuzzing, an LSP, a formatter, a debugger, or cross-compilation.
+Vāk is not yet 100% complete. It does not currently implement full place-based ownership, pointers, slices, non-lexical lifetimes, destruction, heap allocation, a complete runtime, modules, imports, generics, pattern matching, FFI declarations, sanitizer fuzzing automation, an LSP, a formatter, a debugger, or cross-compilation.
 
 The current code is best understood as a thoroughly tested compiler foundation and learning repository. It is suitable for studying compiler stages, writing small Vāk examples, inspecting LLVM IR, and continuing the language-design work. It should not yet be used as a production systems language or as a replacement for a mature memory-safe compiler.
 

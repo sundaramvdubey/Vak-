@@ -81,16 +81,24 @@ pub struct Token {
 }
 #[derive(Clone, Debug, PartialEq)]
 pub struct Diagnostic {
+    pub code: Option<&'static str>,
     pub message: String,
     pub span: Span,
 }
 impl fmt::Display for Diagnostic {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(
-            f,
-            "error: {} at {}:{}",
-            self.message, self.span.line, self.span.column
-        )
+        match self.code {
+            Some(code) => write!(
+                f,
+                "error[{code}]: {} at {}:{}",
+                self.message, self.span.line, self.span.column
+            ),
+            None => write!(
+                f,
+                "error: {} at {}:{}",
+                self.message, self.span.line, self.span.column
+            ),
+        }
     }
 }
 
@@ -230,6 +238,7 @@ pub fn lex(source: &str) -> Result<Vec<Token>, Vec<Diagnostic>> {
                 });
             } else {
                 errors.push(Diagnostic {
+                    code: None,
                     message: "unterminated string literal".into(),
                     span: Span::new(start, i, sl, sc),
                 });
@@ -285,6 +294,7 @@ pub fn lex(source: &str) -> Result<Vec<Token>, Vec<Diagnostic>> {
             '.' => TokenKind::Dot,
             _ => {
                 errors.push(Diagnostic {
+                    code: None,
                     message: format!("unexpected character `{c}`"),
                     span: Span::new(start, start + 1, sl, sc),
                 });
@@ -456,6 +466,7 @@ impl Parser {
             true
         } else {
             self.errors.push(Diagnostic {
+                code: None,
                 message: format!("expected {msg}, found {:?}", self.current().kind),
                 span: self.current().span,
             });
@@ -467,6 +478,7 @@ impl Parser {
             TokenKind::Ident(s) => Some(s),
             _ => {
                 self.errors.push(Diagnostic {
+                    code: None,
                     message: "expected identifier".into(),
                     span: self.current().span,
                 });
@@ -558,6 +570,7 @@ impl Parser {
                 TokenKind::Int(s) => s.parse().unwrap_or(0),
                 _ => {
                     self.errors.push(Diagnostic {
+                        code: None,
                         message: "expected array length".into(),
                         span: self.current().span,
                     });
@@ -578,6 +591,7 @@ impl Parser {
                 TokenKind::StringType => "String".into(),
                 _ => {
                     self.errors.push(Diagnostic {
+                        code: None,
                         message: "expected type".into(),
                         span: self.current().span,
                     });
@@ -771,6 +785,7 @@ impl Parser {
             }
             _ => {
                 self.errors.push(Diagnostic {
+                    code: None,
                     message: "expected expression".into(),
                     span: t.span,
                 });
@@ -892,18 +907,30 @@ pub enum SemanticType {
     Unknown,
 }
 
+#[derive(Clone, Debug, PartialEq, Eq)]
+enum OwnershipState {
+    Uninitialized,
+    Owned,
+    Moved,
+}
 #[derive(Clone, Debug)]
 struct Binding {
     ty: SemanticType,
     mutable: bool,
     initialized: bool,
+    ownership: OwnershipState,
+}
+#[derive(Clone, Debug)]
+struct BorrowState {
+    mutable: bool,
+    scope_depth: usize,
+    persistent: bool,
 }
 #[derive(Clone, Debug)]
 struct FunctionSignature {
     params: Vec<SemanticType>,
     return_type: SemanticType,
 }
-
 pub struct SemanticAnalyzer {
     scopes: Vec<HashMap<String, Binding>>,
     functions: HashMap<String, FunctionSignature>,
@@ -911,8 +938,10 @@ pub struct SemanticAnalyzer {
     errors: Vec<Diagnostic>,
     current_return: SemanticType,
     loop_depth: usize,
+    borrow_states: HashMap<String, BorrowState>,
+    scope_depth: usize,
+    source: Option<String>,
 }
-
 impl SemanticAnalyzer {
     pub fn new() -> Self {
         let mut functions = HashMap::new();
@@ -930,13 +959,56 @@ impl SemanticAnalyzer {
             errors: Vec::new(),
             current_return: SemanticType::Unit,
             loop_depth: 0,
+            borrow_states: HashMap::new(),
+            scope_depth: 0,
+            source: None,
         }
     }
     fn error(&mut self, message: impl Into<String>) {
+        let message = message.into();
+        let code = if message.contains("move") {
+            "E0401"
+        } else if message.contains("borrow") || message.contains("borrowed") {
+            "E0402"
+        } else if message.contains("uninitialized") {
+            "E0403"
+        } else if message.contains("immutable") || message.contains("assign") {
+            "E0404"
+        } else if message.contains("type") {
+            "E0301"
+        } else {
+            "E0001"
+        };
+        let span = self
+            .source
+            .as_deref()
+            .and_then(|source| {
+                let needle = message.split('`').nth(1)?;
+                let start = source.rfind(needle)?;
+                let before = &source[..start];
+                Some(Span::new(
+                    start,
+                    start + needle.len(),
+                    before.lines().count().max(1),
+                    start - before.rfind('\n').map(|i| i + 1).unwrap_or(0) + 1,
+                ))
+            })
+            .unwrap_or_else(|| Span::new(0, 0, 1, 1));
         self.errors.push(Diagnostic {
-            message: message.into(),
-            span: Span::new(0, 0, 1, 1),
+            code: Some(code),
+            message,
+            span,
         });
+    }
+    fn enter(&mut self) {
+        self.scope_depth += 1;
+        self.scopes.push(HashMap::new());
+    }
+    fn leave(&mut self) {
+        self.scopes.pop();
+        self.borrow_states
+            .retain(|_, borrow| borrow.scope_depth < self.scope_depth);
+        self.scope_depth = self.scope_depth.saturating_sub(1);
     }
     fn declare(&mut self, name: &str, binding: Binding) {
         let scope = self
@@ -955,43 +1027,11 @@ impl SemanticAnalyzer {
             .rev()
             .find_map(|scope| scope.get(name).cloned())
     }
-    fn mark_initialized(&mut self, name: &str) {
-        for scope in self.scopes.iter_mut().rev() {
-            if let Some(binding) = scope.get_mut(name) {
-                binding.initialized = true;
-                return;
-            }
-        }
-    }
-    fn enter(&mut self) {
-        self.scopes.push(HashMap::new());
-    }
-    fn leave(&mut self) {
-        self.scopes.pop();
-    }
-    fn merge_initialized(
-        &mut self,
-        base: &[HashMap<String, Binding>],
-        left: &[HashMap<String, Binding>],
-        right: &[HashMap<String, Binding>],
-    ) {
-        let mut merged = base.to_vec();
-        for (index, scope) in merged.iter_mut().enumerate() {
-            for (name, binding) in scope.iter_mut() {
-                let left_initialized = left
-                    .get(index)
-                    .and_then(|s| s.get(name))
-                    .map(|b| b.initialized)
-                    .unwrap_or(binding.initialized);
-                let right_initialized = right
-                    .get(index)
-                    .and_then(|s| s.get(name))
-                    .map(|b| b.initialized)
-                    .unwrap_or(binding.initialized);
-                binding.initialized = left_initialized && right_initialized;
-            }
-        }
-        self.scopes = merged;
+    fn lookup_mut(&mut self, name: &str) -> Option<&mut Binding> {
+        self.scopes
+            .iter_mut()
+            .rev()
+            .find_map(|scope| scope.get_mut(name))
     }
     fn type_from_ast(&mut self, ty: &Type) -> SemanticType {
         match ty {
@@ -1002,11 +1042,7 @@ impl SemanticAnalyzer {
                 "U64" => SemanticType::U64,
                 "F64" => SemanticType::F64,
                 "String" => SemanticType::String,
-                name if self.structs.contains_key(name) => SemanticType::Struct(name.to_string()),
-                name => {
-                    self.error(format!("unknown type `{name}`"));
-                    SemanticType::Unknown
-                }
+                other => SemanticType::Struct(other.into()),
             },
             Type::Array(element, length) => {
                 SemanticType::Array(Box::new(self.type_from_ast(element)), *length)
@@ -1019,6 +1055,106 @@ impl SemanticAnalyzer {
     }
     fn compatible(expected: &SemanticType, found: &SemanticType) -> bool {
         expected == found || *expected == SemanticType::Unknown || *found == SemanticType::Unknown
+    }
+    fn is_copy(&self, ty: &SemanticType) -> bool {
+        match ty {
+            SemanticType::Bool
+            | SemanticType::I32
+            | SemanticType::U32
+            | SemanticType::U64
+            | SemanticType::F64
+            | SemanticType::Reference { .. } => true,
+            SemanticType::Array(element, _) => self.is_copy(element),
+            SemanticType::Struct(name) => self
+                .structs
+                .get(name)
+                .map(|fields| fields.values().all(|field| self.is_copy(field)))
+                .unwrap_or(false),
+            SemanticType::String | SemanticType::Unit | SemanticType::Unknown => false,
+        }
+    }
+    fn ensure_available(&mut self, name: &str, action: &str) -> Option<Binding> {
+        match self.lookup(name) {
+            Some(binding) if binding.ownership == OwnershipState::Moved => {
+                self.error(format!(
+                    "use after move of `{name}` while attempting to {action}"
+                ));
+                None
+            }
+            Some(binding)
+                if !binding.initialized || binding.ownership == OwnershipState::Uninitialized =>
+            {
+                self.error(format!("use of uninitialized binding `{name}`"));
+                None
+            }
+            Some(binding) => Some(binding),
+            None => {
+                self.error(format!("undefined name `{name}`"));
+                None
+            }
+        }
+    }
+    fn ensure_not_borrowed(&mut self, name: &str, action: &str) {
+        if let Some(borrow) = self.borrow_states.get(name) {
+            self.error(if borrow.mutable {
+                format!("cannot {action} `{name}`: an exclusive mutable borrow is active")
+            } else {
+                format!("cannot {action} `{name}`: a shared borrow is active")
+            });
+        }
+    }
+    fn move_expr(&mut self, expr: &Expr) {
+        let Expr::Name(name) = expr else {
+            return;
+        };
+        let Some(current) = self.lookup(name) else {
+            return;
+        };
+        if current.ownership == OwnershipState::Moved || !current.initialized {
+            return;
+        }
+        let Some(binding) = self.ensure_available(name, "move") else {
+            return;
+        };
+        if self.is_copy(&binding.ty) {
+            return;
+        }
+        self.ensure_not_borrowed(name, "move");
+        if let Some(binding) = self.lookup_mut(name) {
+            binding.ownership = OwnershipState::Moved;
+        }
+    }
+    fn release_temporaries(&mut self) {
+        self.borrow_states.retain(|_, borrow| borrow.persistent);
+    }
+    fn mark_borrow(&mut self, name: &str, mutable: bool) {
+        if let Some(existing) = self.borrow_states.get(name) {
+            if mutable || existing.mutable {
+                self.error(if existing.mutable {
+                    format!("cannot create a second mutable borrow of `{name}`")
+                } else {
+                    format!("cannot mutably borrow `{name}` while a shared borrow is active")
+                });
+            }
+            return;
+        }
+        self.borrow_states.insert(
+            name.to_string(),
+            BorrowState {
+                mutable,
+                scope_depth: self.scope_depth,
+                persistent: false,
+            },
+        );
+    }
+    fn persist_borrow(&mut self, expr: &Expr) {
+        if let Expr::Borrow { expr, .. } = expr {
+            if let Expr::Name(name) = expr.as_ref() {
+                if let Some(borrow) = self.borrow_states.get_mut(name) {
+                    borrow.persistent = true;
+                }
+            }
+        }
     }
     pub fn analyze(mut self, program: &Program) -> Result<(), Vec<Diagnostic>> {
         self.collect_structs(program);
@@ -1047,9 +1183,9 @@ impl SemanticAnalyzer {
                 if self.structs.contains_key(&decl.name) || self.functions.contains_key(&decl.name)
                 {
                     self.error(format!("duplicate definition of `{}`", decl.name));
-                    continue;
+                } else {
+                    self.structs.insert(decl.name.clone(), HashMap::new());
                 }
-                self.structs.insert(decl.name.clone(), HashMap::new());
             }
         }
     }
@@ -1119,6 +1255,7 @@ impl SemanticAnalyzer {
                     ty: parameter_type,
                     mutable: false,
                     initialized: true,
+                    ownership: OwnershipState::Owned,
                 },
             );
         }
@@ -1156,12 +1293,21 @@ impl SemanticAnalyzer {
                         ));
                     }
                 }
+                if let Some(value) = value {
+                    self.move_expr(value);
+                    self.persist_borrow(value);
+                }
                 self.declare(
                     name,
                     Binding {
                         ty: final_type,
                         mutable: *mutable,
                         initialized: value.is_some(),
+                        ownership: if value.is_some() {
+                            OwnershipState::Owned
+                        } else {
+                            OwnershipState::Uninitialized
+                        },
                     },
                 );
             }
@@ -1178,6 +1324,9 @@ impl SemanticAnalyzer {
                         "return type mismatch: expected {:?}, found {:?}",
                         self.current_return, found
                     ));
+                }
+                if let Some(e) = expr {
+                    self.move_expr(e);
                 }
             }
             Stmt::If {
@@ -1233,6 +1382,7 @@ impl SemanticAnalyzer {
                         ty: SemanticType::I32,
                         mutable: false,
                         initialized: true,
+                        ownership: OwnershipState::Owned,
                     },
                 );
                 self.check_block(body);
@@ -1243,6 +1393,31 @@ impl SemanticAnalyzer {
             Stmt::Break | Stmt::Continue => {
                 if self.loop_depth == 0 {
                     self.error("`break` and `continue` are only valid inside loops");
+                }
+            }
+        }
+        self.release_temporaries();
+    }
+    fn merge_initialized(
+        &mut self,
+        base: &[HashMap<String, Binding>],
+        left: &[HashMap<String, Binding>],
+        right: &[HashMap<String, Binding>],
+    ) {
+        for (index, scope) in self.scopes.iter_mut().enumerate() {
+            for (name, binding) in scope.iter_mut() {
+                if let (Some(l), Some(r)) = (
+                    left.get(index).and_then(|s| s.get(name)),
+                    right.get(index).and_then(|s| s.get(name)),
+                ) {
+                    binding.initialized = l.initialized && r.initialized;
+                    if l.ownership == OwnershipState::Moved || r.ownership == OwnershipState::Moved
+                    {
+                        binding.ownership = OwnershipState::Moved;
+                    }
+                } else if let Some(original) = base.get(index).and_then(|s| s.get(name)) {
+                    binding.initialized = original.initialized;
+                    binding.ownership = original.ownership.clone();
                 }
             }
         }
@@ -1260,10 +1435,12 @@ impl SemanticAnalyzer {
             Expr::Borrow { mutable, expr } => {
                 let inner = self.check_expr(expr);
                 if let Expr::Name(name) = expr.as_ref() {
-                    if let Some(binding) = self.lookup(name) {
+                    if let Some(binding) = self.ensure_available(name, "borrow") {
                         if *mutable && !binding.mutable {
                             self.error(format!("cannot mutably borrow immutable binding `{name}`"));
                         }
+                        self.ensure_not_borrowed(name, "borrow");
+                        self.mark_borrow(name, *mutable);
                     }
                 }
                 SemanticType::Reference {
@@ -1283,18 +1460,10 @@ impl SemanticAnalyzer {
             Expr::Float(_) => SemanticType::F64,
             Expr::String(_) => SemanticType::String,
             Expr::Bool(_) => SemanticType::Bool,
-            Expr::Name(name) => match self.lookup(name) {
-                Some(binding) => {
-                    if !binding.initialized {
-                        self.error(format!("use of uninitialized binding `{name}`"));
-                    }
-                    binding.ty
-                }
-                None => {
-                    self.error(format!("undefined name `{name}`"));
-                    SemanticType::Unknown
-                }
-            },
+            Expr::Name(name) => self
+                .ensure_available(name, "read")
+                .map(|b| b.ty)
+                .unwrap_or(SemanticType::Unknown),
             Expr::Array(items) => {
                 let mut element = SemanticType::Unknown;
                 for item in items {
@@ -1359,24 +1528,14 @@ impl SemanticAnalyzer {
                         }
                         l
                     }
-                    BinaryOp::Eq | BinaryOp::NotEq => {
+                    BinaryOp::Eq
+                    | BinaryOp::NotEq
+                    | BinaryOp::Lt
+                    | BinaryOp::LtEq
+                    | BinaryOp::Gt
+                    | BinaryOp::GtEq => {
                         if !Self::compatible(&l, &r) {
                             self.error("comparison operands must have compatible types");
-                        }
-                        SemanticType::Bool
-                    }
-                    BinaryOp::Lt | BinaryOp::LtEq | BinaryOp::Gt | BinaryOp::GtEq => {
-                        if !Self::compatible(&l, &r)
-                            || !matches!(
-                                l,
-                                SemanticType::I32
-                                    | SemanticType::U32
-                                    | SemanticType::U64
-                                    | SemanticType::F64
-                                    | SemanticType::Unknown
-                            )
-                        {
-                            self.error("ordering operands must have the same numeric type");
                         }
                         SemanticType::Bool
                     }
@@ -1391,10 +1550,11 @@ impl SemanticAnalyzer {
             Expr::Assign { left, right } => {
                 let right_ty = self.check_expr(right);
                 match left.as_ref() {
-                    Expr::Name(name) => match self.lookup(name) {
-                        Some(binding) => {
+                    Expr::Name(name) => {
+                        self.ensure_not_borrowed(name, "assign to");
+                        if let Some(binding) = self.lookup(name) {
                             if !binding.mutable {
-                                self.error(format!("cannot assign to immutable binding `{name}`"));
+                                self.error(format!("cannot assign to immutable binding `{name}"));
                             }
                             if !Self::compatible(&binding.ty, &right_ty) {
                                 self.error(format!(
@@ -1402,20 +1562,24 @@ impl SemanticAnalyzer {
                                     binding.ty, right_ty
                                 ));
                             }
-                            self.mark_initialized(name);
-                            binding.ty
-                        }
-                        None => {
-                            self.error(format!("undefined name `{name}`"));
+                            let result_ty = binding.ty.clone();
+                            self.move_expr(right);
+                            if let Some(binding) = self.lookup_mut(name) {
+                                binding.initialized = true;
+                                binding.ownership = OwnershipState::Owned;
+                            }
+                            result_ty
+                        } else {
+                            self.error(format!("undefined name `{name}"));
                             SemanticType::Unknown
                         }
-                    },
+                    }
                     Expr::Unary {
                         op: UnaryOp::Deref,
                         expr,
                     } => {
-                        let reference_ty = self.check_expr(expr);
-                        match reference_ty {
+                        let ref_ty = self.check_expr(expr);
+                        match ref_ty {
                             SemanticType::Reference { mutable, inner } => {
                                 if !mutable {
                                     self.error("cannot assign through a shared reference");
@@ -1434,29 +1598,25 @@ impl SemanticAnalyzer {
                             }
                         }
                     }
-                    Expr::Index { .. } | Expr::Field { .. } => {
-                        let base_name = match left.as_ref() {
-                            Expr::Index { base, .. } | Expr::Field { base, .. } => {
-                                match base.as_ref() {
-                                    Expr::Name(name) => Some(name),
-                                    _ => None,
-                                }
-                            }
-                            _ => None,
-                        };
-                        if let Some(name) = base_name {
+                    Expr::Index { base, .. } | Expr::Field { base, .. } => {
+                        if let Expr::Name(name) = base.as_ref() {
+                            self.ensure_not_borrowed(name, "assign to");
                             if let Some(binding) = self.lookup(name) {
                                 if !binding.mutable {
                                     self.error(format!(
-                                        "cannot assign through immutable binding `{name}`"
+                                        "cannot assign through immutable binding `{name}"
                                     ));
                                 }
-                                if !binding.initialized {
-                                    self.mark_initialized(name);
-                                }
+                            } else {
+                                self.error(format!("undefined name `{name}"));
                             }
+                            if let Some(binding) = self.lookup_mut(name) {
+                                binding.initialized = true;
+                                binding.ownership = OwnershipState::Owned;
+                            }
+                        } else {
+                            self.error("aggregate assignment requires a named local");
                         }
-                        self.check_expr(left);
                         right_ty
                     }
                     _ => {
@@ -1486,12 +1646,17 @@ impl SemanticAnalyzer {
                             args.len()
                         ));
                     }
-                    for (found, expected) in arg_types.iter().zip(sig.params.iter()) {
+                    for ((arg, found), expected) in
+                        args.iter().zip(arg_types.iter()).zip(sig.params.iter())
+                    {
                         if !Self::compatible(expected, found) {
                             self.error(format!(
                                 "argument type mismatch: expected {:?}, found {:?}",
                                 expected, found
                             ));
+                        }
+                        if !matches!(expected, SemanticType::Reference { .. }) {
+                            self.move_expr(arg);
                         }
                     }
                     sig.return_type
@@ -1515,17 +1680,15 @@ impl SemanticAnalyzer {
             Expr::Field { base, name } => {
                 let base_ty = self.check_expr(base);
                 match base_ty {
-                    SemanticType::Struct(struct_name) => {
-                        let field_type = self
-                            .structs
-                            .get(&struct_name)
-                            .and_then(|fields| fields.get(name))
-                            .cloned();
-                        field_type.unwrap_or_else(|| {
+                    SemanticType::Struct(struct_name) => self
+                        .structs
+                        .get(&struct_name)
+                        .and_then(|fields| fields.get(name))
+                        .cloned()
+                        .unwrap_or_else(|| {
                             self.error(format!("struct `{struct_name}` has no field `{name}`"));
                             SemanticType::Unknown
-                        })
-                    }
+                        }),
                     SemanticType::Unknown => SemanticType::Unknown,
                     _ => {
                         self.error("field access requires a struct");
@@ -1536,11 +1699,14 @@ impl SemanticAnalyzer {
         }
     }
 }
-
 pub fn analyze(program: &Program) -> Result<(), Vec<Diagnostic>> {
     SemanticAnalyzer::new().analyze(program)
 }
-
+pub fn analyze_with_source(program: &Program, source: &str) -> Result<(), Vec<Diagnostic>> {
+    let mut analyzer = SemanticAnalyzer::new();
+    analyzer.source = Some(source.to_string());
+    analyzer.analyze(program)
+}
 #[cfg(test)]
 mod semantic_tests {
     use super::*;
