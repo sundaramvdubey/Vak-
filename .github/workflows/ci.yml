@@ -44,23 +44,36 @@ jobs:
       - name: Rust tests
         run: cargo test
 
-      - name: Validate generated LLVM and native executables
+      - name: Validate generated LLVM and native executables (Unix)
+        if: runner.os != 'Windows'
         shell: bash
         run: |
           set -euo pipefail
           out="$RUNNER_TEMP/vak-ci"
           mkdir -p "$out"
-          llvm_as="llvm-as"
-          clang_bin="clang"
-          if [[ "$RUNNER_OS" == "Windows" ]]; then
-            export PATH="/c/Program Files/LLVM/bin:$PATH"
-            llvm_as="llvm-as.exe"
-            clang_bin="clang.exe"
-          fi
           for sample in native control aggregates for_range strings references; do
             cargo run --quiet -- emit "examples/${sample}.vak" "$out/${sample}.ll"
-            "$llvm_as" "$out/${sample}.ll" -o "$out/${sample}.bc"
-            executable="$out/${sample}"
-            if [[ "$RUNNER_OS" == "Windows" ]]; then executable="${executable}.exe"; fi
-            "$clang_bin" "$out/${sample}.ll" -o "$executable"
+            llvm-as "$out/${sample}.ll" -o "$out/${sample}.bc"
+            clang "$out/${sample}.ll" -o "$out/${sample}"
           done
+
+      - name: Validate generated LLVM and native executables (Windows)
+        if: runner.os == 'Windows'
+        shell: powershell
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $out = Join-Path $env:RUNNER_TEMP 'vak-ci'
+          New-Item -ItemType Directory -Force -Path $out | Out-Null
+          $llvmAs = 'C:\Program Files\LLVM\bin\llvm-as.exe'
+          $clang = 'C:\Program Files\LLVM\bin\clang.exe'
+          if (-not (Test-Path $llvmAs)) { throw "LLVM assembler not found at $llvmAs" }
+          if (-not (Test-Path $clang)) { throw "Clang not found at $clang" }
+          foreach ($sample in @('native', 'control', 'aggregates', 'for_range', 'strings', 'references')) {
+            $ll = Join-Path $out "$sample.ll"
+            $bc = Join-Path $out "$sample.bc"
+            $exe = Join-Path $out "$sample.exe"
+            cargo run --quiet -- emit "examples/$sample.vak" $ll
+            & $llvmAs $ll -o $bc
+            & $clang $ll -o $exe
+            if ($LASTEXITCODE -ne 0) { throw "Native validation failed for $sample" }
+          }
