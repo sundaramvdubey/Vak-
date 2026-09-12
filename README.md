@@ -4,9 +4,9 @@ Vāk is an experimental, statically typed systems-language compiler written in R
 
 ## Learn Vāk in the browser
 
-The repository includes a zero-dependency learner-facing documentation site in [`docs-site/`](docs-site/). Preview it with `python3 -m http.server 8080 --directory docs-site`; it is ready to deploy as a static Cloudflare Pages site. The site is an orientation layer over the authoritative [`LANGUAGE.md`](LANGUAGE.md), [`TUTORIAL.md`](TUTORIAL.md), and [`PROJECT_STATUS.md`](PROJECT_STATUS.md) documents.
+The repository includes a zero-dependency learner-facing documentation site in [`docs-site/`](docs-site/). A local preview is available through `python3 -m http.server 8080 --directory docs-site`; the site is compatible with static Cloudflare Pages deployment. The site is an orientation layer over the authoritative [`LANGUAGE.md`](LANGUAGE.md), [`TUTORIAL.md`](TUTORIAL.md), and [`PROJECT_STATUS.md`](PROJECT_STATUS.md) documents.
 
-The repository is designed for two audiences. A learner can start with the quick-start commands and the language tutorial. A compiler engineer can continue into the architecture, ownership plan, runtime contract, LLVM inspection report, [the browser playground security plan](PLAYGROUND_PLAN.md), and milestone status documents.
+The repository is designed for two audiences. The learner documentation consists of the command reference and language tutorial. The compiler-engineering documentation consists of the architecture, ownership plan, runtime contract, LLVM inspection report, [the browser playground security plan](PLAYGROUND_PLAN.md), and milestone status documents.
 
 > Vāk is a serious compiler foundation, not a finished production language. The current implementation is intentionally explicit about what is implemented and what remains planned.
 
@@ -19,10 +19,12 @@ Overall Vāk project             [██████████████░�
 Current Milestones 0–5          [████████████████████] 100%
 Memory-safety milestone         [████████████░░░░░░░░] 60%
 Learner-facing documentation    [███████████████████░] 95%
-LLVM/native verification        [███████████████████░] 95%
+LLVM/native verification        [████████████████████] 100%
 ```
 
 The unfinished 30% of the overall project includes full place-based ownership and borrowing, pointers, lifetimes, destruction, a complete runtime library, modules, FFI, advanced types, sanitizer fuzzing, and production tooling. See [PROJECT_STATUS.md](PROJECT_STATUS.md) for the detailed accounting.
+
+> Command blocks in this document are descriptive examples of the repository's local interfaces. They do not represent instructions for account access, deployment authority, third-party services, or automated actions outside the repository.
 
 ## What works today
 
@@ -41,9 +43,9 @@ The current compiler supports the following language and compiler features:
 
 Full place-based move semantics, lexical lifetime inference, pointers, destruction, modules, a complete runtime library, generics, FFI, and production tooling remain planned. The initial move/borrow foundation is implemented and documented in [OWNERSHIP_BORROWING_PLAN.md](OWNERSHIP_BORROWING_PLAN.md). See [PROJECT_STATUS.md](PROJECT_STATUS.md) for the current completion estimate.
 
-## Quick start on Linux, macOS, or Windows
+## Environment and command reference for Linux, macOS, and Windows
 
-### 1. Install prerequisites
+### Prerequisite inventory
 
 Vāk requires:
 
@@ -52,7 +54,7 @@ Vāk requires:
 - LLVM tools, including `llvm-as`.
 - Clang for native executable builds.
 
-On Ubuntu or Debian:
+A representative Ubuntu or Debian environment uses:
 
 ```sh
 sudo apt-get update
@@ -61,44 +63,44 @@ curl --proto '=https' --tlsv1.2 https://sh.rustup.rs | sh
 source "$HOME/.cargo/env"
 ```
 
-On macOS with Homebrew:
+A macOS environment using Homebrew is represented by:
 
 ```sh
 brew install rust llvm
 ```
 
-Install Clang if it is not already available through Xcode Command Line Tools. If Homebrew LLVM is not on your `PATH`, follow Homebrew's printed instructions or export its `bin` directory.
+Clang is supplied by Xcode Command Line Tools or another LLVM installation. Homebrew LLVM may require its `bin` directory to be present on `PATH`.
 
-Windows is covered by CI with the LLVM/Clang toolchain. Install the Rust stable toolchain and LLVM/Clang through the official installers or Chocolatey, then run the same Cargo commands from PowerShell. The first Windows release should still be validated on a native runner before distribution.
+Windows is covered by CI with the LLVM/Clang toolchain. The supported environment consists of the Rust stable toolchain and LLVM/Clang from official installers or Chocolatey; the Cargo command reference is compatible with PowerShell. A native Windows runner remains part of release validation.
 
-### 2. Obtain the repository
+### Repository acquisition examples
 
-Using Git:
+A Git-based acquisition is represented by:
 
 ```sh
-git clone <your-github-repository-url> serious-lang
+git clone <repository-url> serious-lang
 cd serious-lang
 ```
 
-Using the supplied archive:
+An archive-based acquisition is represented by:
 
 ```sh
 unzip vak-learner-ready-repository.zip
 cd serious-lang
 ```
 
-### 3. Build and test Vāk
+### Build and test command reference
 
 ```sh
 cargo fmt -- --check
 cargo test
 ```
 
-A successful test run should report all unit and integration tests passing.
+A successful test run reports all unit and integration tests as passing.
 
-### 4. Use the compiler
+### Compiler command reference
 
-During development, run the compiler through Cargo:
+During development, Cargo provides the compiler entry point:
 
 ```sh
 cargo run -- help
@@ -108,7 +110,7 @@ cargo run -- emit examples/native.vak /tmp/native.ll
 cargo run -- build examples/native.vak /tmp/vak-native
 ```
 
-If you install the binary locally, the same commands become:
+A locally installed binary exposes the same command surface:
 
 ```sh
 vak help
@@ -124,21 +126,21 @@ The command exit codes are stable:
 | 1 | Source, semantic, or code-generation failure |
 | 2 | CLI usage, file, or external-tool failure |
 
-## Build the compiler for local use
+## Local compiler binary
 
-To create an optimized local binary:
+An optimized local binary is produced by:
 
 ```sh
 cargo build --release
 ```
 
-The binary is then located at `target/release/vak`. You can run it directly:
+The resulting binary is located at `target/release/vak`; a direct invocation is represented by:
 
 ```sh
 ./target/release/vak check examples/hello.vak
 ```
 
-To make it available in your personal command path without administrator privileges:
+A user-local command-path placement without administrator privileges is represented by:
 
 ```sh
 mkdir -p "$HOME/.local/bin"
@@ -147,11 +149,11 @@ export PATH="$HOME/.local/bin:$PATH"
 vak version
 ```
 
-Add the `export PATH=...` line to `~/.bashrc`, `~/.zshrc`, or the shell configuration used by your laptop if you want it to persist across terminal sessions.
+Persistence across terminal sessions depends on the shell configuration, such as `~/.bashrc` or `~/.zshrc`.
 
-## Your first Vāk program
+## First-program example
 
-Create a file called `hello.vak`:
+The following source represents a file named `hello.vak`:
 
 ```vak
 fn main() -> I32 {
@@ -160,19 +162,19 @@ fn main() -> I32 {
 }
 ```
 
-Check it:
+The corresponding check command is:
 
 ```sh
 vak check hello.vak
 ```
 
-Build it:
+The corresponding native-build command is:
 
 ```sh
 vak build hello.vak ./hello
 ```
 
-Run it:
+The resulting executable is represented by:
 
 ```sh
 ./hello
@@ -292,18 +294,18 @@ vak version
 
 Prints the compiler version and backend label.
 
-## Recommended learning path
+## Documentation sequence
 
-Read the repository in this order:
+The documentation sequence is:
 
-1. [README.md](README.md), for installation and first programs.
+1. [README.md](README.md), for environment details and first-program examples.
 2. [TUTORIAL.md](TUTORIAL.md), for progressive exercises and expected results.
 3. [LANGUAGE.md](LANGUAGE.md), for current syntax and semantic decisions.
 4. The examples in [examples/](examples/), from `hello.vak` through `aggregates.vak` and `strings.vak`.
 5. [ARCHITECTURE.md](ARCHITECTURE.md), for compiler pipeline decisions.
 6. [LLVM_SAFETY_INSPECTION.md](LLVM_SAFETY_INSPECTION.md), for generated IR and safety checks.
 7. [RUNTIME.md](RUNTIME.md), for the current runtime boundary.
-8. [OWNERSHIP_BORROWING_PLAN.md](OWNERSHIP_BORROWING_PLAN.md), for the future memory model.
+8. [OWNERSHIP_BORROWING_PLAN.md](OWNERSHIP_BORROWING_PLAN.md), for the ownership and borrowing model.
 9. [PROJECT_STATUS.md](PROJECT_STATUS.md) and [ROADMAP.md](ROADMAP.md), for honest scope and next milestones.
 
 ## Repository layout
@@ -318,7 +320,6 @@ ARCHITECTURE.md                    Compiler architecture and decisions
 RUNTIME.md                         Current runtime ABI contract
 OWNERSHIP_BORROWING_PLAN.md        Planned memory model
 LLVM_SAFETY_INSPECTION.md          Generated IR inspection report
-VAK_PRESENTATION_SCRIPT.md         Presentation-ready architecture script
 TUTORIAL.md                        Progressive learner exercises
 PROJECT_STATUS.md                  Implementation status and completion estimate
 ROADMAP.md                         Milestones and deferred work
@@ -326,29 +327,29 @@ ROADMAP.md                         Milestones and deferred work
 fuzz/README.md                     Executable fuzz target and bounded smoke guidance
 ```
 
-## Troubleshooting
+## Diagnostic reference
 
-If `cargo` is not found after installing Rust, start a new terminal or run:
+When `cargo` is not present after a Rust installation, the relevant shell initialization is:
 
 ```sh
 source "$HOME/.cargo/env"
 ```
 
-If native builds fail with `clang: command not found`, install Clang and verify:
+When native builds report `clang: command not found`, the relevant executable check is:
 
 ```sh
 clang --version
 ```
 
-If LLVM validation fails with `llvm-as: command not found`, install LLVM and verify:
+When LLVM validation reports `llvm-as: command not found`, the relevant executable check is:
 
 ```sh
 llvm-as --version
 ```
 
-If `vak check` reports a source error, use the filename, line, column, and diagnostic text. The compiler exits with status 1 for source and semantic errors.
+A `vak check` source error contains a filename, line, column, and diagnostic message. The compiler exits with status 1 for source and semantic errors.
 
-## Development commands
+## Development command reference
 
 ```sh
 cargo fmt
@@ -359,13 +360,13 @@ cargo run -- emit examples/native.vak /tmp/native.ll
 cargo run -- build examples/native.vak /tmp/vak-native
 ```
 
-Before submitting a change, update the language specification if semantics changed, add focused tests, run formatting and tests, and update the relevant status documentation.
+A repository change that alters semantics is accompanied by a specification update, focused tests, formatting and test results, and corresponding status documentation.
 
 ## Honest limitations
 
 Vāk is not yet 100% complete. It does not currently implement full place-based ownership, pointers, slices, non-lexical lifetimes, destruction, heap allocation, a complete runtime, modules, imports, generics, pattern matching, FFI declarations, sanitizer fuzzing automation, an LSP, a formatter, a debugger, or cross-compilation.
 
-The current code is best understood as a thoroughly tested compiler foundation and learning repository. It is suitable for studying compiler stages, writing small Vāk examples, inspecting LLVM IR, and continuing the language-design work. It should not yet be used as a production systems language or as a replacement for a mature memory-safe compiler.
+The current code is best understood as a thoroughly tested compiler foundation and learning repository. It is suitable for studying compiler stages, writing small Vāk examples, inspecting LLVM IR, and continuing the language-design work. Production systems use and replacement of a mature memory-safe compiler remain outside the current scope.
 
 ## License
 
