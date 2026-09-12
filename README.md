@@ -2,16 +2,6 @@
 
 Vāk is an experimental, statically typed systems-language compiler written in Rust. It translates Vāk source code into validated LLVM IR and can build native executables through Clang.
 
-## Website source and self-hosting
-
-The Vāk website is maintained as a separate, dependency-light React/Vite repository so it can be uploaded to a private repository and deployed independently on Cloudflare Pages:
-
-- **Local website source handoff:** `/home/ubuntu/projects/v-k-d353fe15/vak-website-source/`
-- **Private website repository:** add its URL here after upload
-- **Cloudflare Pages URL:** add the deployed `pages.dev` or custom-domain URL here after deployment
-
-The website source has no Manus analytics, debug collector, Manus storage proxy, generated Manus markers, server requirement, or paid-service dependency. See its `README.md` for the exact Cloudflare Pages settings.
-
 ## Learn Vāk in the browser
 
 The repository includes a zero-dependency learner-facing documentation site in [`docs-site/`](docs-site/). Preview it with `python3 -m http.server 8080 --directory docs-site`; it is ready to deploy as a static Cloudflare Pages site. The site is an orientation layer over the authoritative [`LANGUAGE.md`](LANGUAGE.md), [`TUTORIAL.md`](TUTORIAL.md), and [`PROJECT_STATUS.md`](PROJECT_STATUS.md) documents.
