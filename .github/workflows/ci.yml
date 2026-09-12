@@ -6,23 +6,54 @@ on:
 
 jobs:
   test:
-    runs-on: ubuntu-latest
+    name: ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+
     steps:
       - uses: actions/checkout@v4
       - uses: actions-rust-lang/setup-rust-toolchain@v1
         with:
           toolchain: stable
-      - name: Install LLVM and Clang
+          components: rustfmt
+
+      - name: Install LLVM and Clang (Ubuntu)
+        if: runner.os == 'Linux'
         run: sudo apt-get update && sudo apt-get install -y llvm clang
+      - name: Install LLVM and Clang (macOS)
+        if: runner.os == 'macOS'
+        run: brew install llvm
+      - name: Install LLVM and Clang (Windows)
+        if: runner.os == 'Windows'
+        shell: powershell
+        run: choco install llvm -y --no-progress
+
+      - name: Add LLVM tools to PATH (macOS)
+        if: runner.os == 'macOS'
+        run: echo "$(brew --prefix llvm)/bin" >> "$GITHUB_PATH"
+      - name: Add LLVM tools to PATH (Windows)
+        if: runner.os == 'Windows'
+        shell: powershell
+        run: echo "C:\Program Files\LLVM\bin" >> $env:GITHUB_PATH
+
       - name: Format check
         run: cargo fmt -- --check
       - name: Rust tests
         run: cargo test
-      - name: Validate generated LLVM
+
+      - name: Validate generated LLVM and native executables
         shell: bash
         run: |
           set -euo pipefail
-          for sample in native control aggregates for_range strings; do
-            cargo run --quiet -- emit "examples/${sample}.vak" "/tmp/${sample}.ll"
-            llvm-as "/tmp/${sample}.ll" -o "/tmp/${sample}.bc"
+          out="$RUNNER_TEMP/vak-ci"
+          mkdir -p "$out"
+          for sample in native control aggregates for_range strings references; do
+            cargo run --quiet -- emit "examples/${sample}.vak" "$out/${sample}.ll"
+            llvm-as "$out/${sample}.ll" -o "$out/${sample}.bc"
+            executable="$out/${sample}"
+            if [[ "$RUNNER_OS" == "Windows" ]]; then executable="${executable}.exe"; fi
+            clang "$out/${sample}.ll" -o "$executable"
           done

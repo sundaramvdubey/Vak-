@@ -59,6 +59,7 @@ pub enum TokenKind {
     OrOr,
     Bang,
     Eq,
+    Amp,
     Arrow,
     DotDot,
     LParen,
@@ -271,6 +272,7 @@ pub fn lex(source: &str) -> Result<Vec<Token>, Vec<Diagnostic>> {
             '<' => TokenKind::Lt,
             '>' => TokenKind::Gt,
             '=' => TokenKind::Eq,
+            '&' => TokenKind::Amp,
             '(' => TokenKind::LParen,
             ')' => TokenKind::RParen,
             '{' => TokenKind::LBrace,
@@ -363,6 +365,10 @@ pub enum Stmt {
 }
 #[derive(Clone, Debug, PartialEq)]
 pub enum Expr {
+    Borrow {
+        mutable: bool,
+        expr: Box<Expr>,
+    },
     Int(String),
     Float(String),
     String(String),
@@ -399,11 +405,13 @@ pub enum Expr {
 pub enum Type {
     Name(String),
     Array(Box<Type>, usize),
+    Reference { mutable: bool, inner: Box<Type> },
 }
 #[derive(Clone, Debug, PartialEq)]
 pub enum UnaryOp {
     Neg,
     Not,
+    Deref,
 }
 #[derive(Clone, Debug, PartialEq)]
 pub enum BinaryOp {
@@ -531,6 +539,17 @@ impl Parser {
         Some(StructDecl { name, fields })
     }
     fn ty(&mut self) -> Option<Type> {
+        if self.check(&TokenKind::Amp) {
+            self.bump();
+            let mutable = self.check(&TokenKind::Mut);
+            if mutable {
+                self.bump();
+            }
+            return Some(Type::Reference {
+                mutable,
+                inner: Box::new(self.ty()?),
+            });
+        }
         if self.check(&TokenKind::LBracket) {
             self.bump();
             let t = self.ty()?;
@@ -720,6 +739,20 @@ impl Parser {
                 op: UnaryOp::Not,
                 expr: Box::new(self.expr(10)?),
             }),
+            TokenKind::Amp => {
+                let mutable = self.check(&TokenKind::Mut);
+                if mutable {
+                    self.bump();
+                }
+                Some(Expr::Borrow {
+                    mutable,
+                    expr: Box::new(self.expr(10)?),
+                })
+            }
+            TokenKind::Star => Some(Expr::Unary {
+                op: UnaryOp::Deref,
+                expr: Box::new(self.expr(10)?),
+            }),
             TokenKind::LParen => {
                 let x = self.expr(0);
                 self.expect(TokenKind::RParen, "`)`");
@@ -849,6 +882,10 @@ pub enum SemanticType {
     U64,
     F64,
     String,
+    Reference {
+        mutable: bool,
+        inner: Box<SemanticType>,
+    },
     Array(Box<SemanticType>, usize),
     Struct(String),
     Unit,
@@ -974,6 +1011,10 @@ impl SemanticAnalyzer {
             Type::Array(element, length) => {
                 SemanticType::Array(Box::new(self.type_from_ast(element)), *length)
             }
+            Type::Reference { mutable, inner } => SemanticType::Reference {
+                mutable: *mutable,
+                inner: Box::new(self.type_from_ast(inner)),
+            },
         }
     }
     fn compatible(expected: &SemanticType, found: &SemanticType) -> bool {
@@ -1063,6 +1104,12 @@ impl SemanticAnalyzer {
             .as_ref()
             .map(|ty| self.type_from_ast(ty))
             .unwrap_or(SemanticType::Unit);
+        if matches!(function_return, SemanticType::Reference { .. }) {
+            self.error(format!(
+                "function `{}` cannot return a reference in the current ownership milestone",
+                function.name
+            ));
+        }
         let previous_return = std::mem::replace(&mut self.current_return, function_return);
         for (name, ty) in &function.params {
             let parameter_type = self.type_from_ast(ty);
@@ -1210,6 +1257,20 @@ impl SemanticAnalyzer {
     }
     fn check_expr(&mut self, expr: &Expr) -> SemanticType {
         match expr {
+            Expr::Borrow { mutable, expr } => {
+                let inner = self.check_expr(expr);
+                if let Expr::Name(name) = expr.as_ref() {
+                    if let Some(binding) = self.lookup(name) {
+                        if *mutable && !binding.mutable {
+                            self.error(format!("cannot mutably borrow immutable binding `{name}`"));
+                        }
+                    }
+                }
+                SemanticType::Reference {
+                    mutable: *mutable,
+                    inner: Box::new(inner),
+                }
+            }
             Expr::Int(value) => {
                 match value.parse::<i64>() {
                     Ok(number) if (0..=i32::MAX as i64).contains(&number) => {}
@@ -1266,6 +1327,14 @@ impl SemanticAnalyzer {
                         self.require_type(ty, SemanticType::Bool, "logical negation");
                         SemanticType::Bool
                     }
+                    UnaryOp::Deref => match ty {
+                        SemanticType::Reference { inner, .. } => *inner,
+                        SemanticType::Unknown => SemanticType::Unknown,
+                        _ => {
+                            self.error("dereference requires a reference");
+                            SemanticType::Unknown
+                        }
+                    },
                 }
             }
             Expr::Binary { left, op, right } => {
@@ -1341,6 +1410,30 @@ impl SemanticAnalyzer {
                             SemanticType::Unknown
                         }
                     },
+                    Expr::Unary {
+                        op: UnaryOp::Deref,
+                        expr,
+                    } => {
+                        let reference_ty = self.check_expr(expr);
+                        match reference_ty {
+                            SemanticType::Reference { mutable, inner } => {
+                                if !mutable {
+                                    self.error("cannot assign through a shared reference");
+                                }
+                                if !Self::compatible(&inner, &right_ty) {
+                                    self.error(format!(
+                                        "assignment type mismatch: expected {:?}, found {:?}",
+                                        inner, right_ty
+                                    ));
+                                }
+                                *inner
+                            }
+                            _ => {
+                                self.error("dereference assignment requires a reference");
+                                SemanticType::Unknown
+                            }
+                        }
+                    }
                     Expr::Index { .. } | Expr::Field { .. } => {
                         let base_name = match left.as_ref() {
                             Expr::Index { base, .. } | Expr::Field { base, .. } => {
@@ -1529,6 +1622,7 @@ struct LlvmCodegen {
     continue_labels: Vec<String>,
     string_id: usize,
     current_return: SemanticType,
+    function_returns: HashMap<String, SemanticType>,
 }
 
 impl LlvmCodegen {
@@ -1543,6 +1637,7 @@ impl LlvmCodegen {
             continue_labels: Vec::new(),
             string_id: 0,
             current_return: SemanticType::Unit,
+            function_returns: HashMap::new(),
         }
     }
     fn next_temp(&mut self) -> String {
@@ -1568,6 +1663,7 @@ impl LlvmCodegen {
             SemanticType::U64 => Ok("i64".into()),
             SemanticType::F64 => Ok("double".into()),
             SemanticType::String => Ok("ptr".into()),
+            SemanticType::Reference { .. } => Ok("ptr".into()),
             SemanticType::Unit => Ok("void".into()),
             SemanticType::Array(element, length) => {
                 Ok(format!("[{} x {}]", length, Self::llvm_type(element)?))
@@ -1592,10 +1688,50 @@ impl LlvmCodegen {
             Type::Array(element, length) => {
                 SemanticType::Array(Box::new(Self::ast_type(element)), *length)
             }
+            Type::Reference { mutable, inner } => SemanticType::Reference {
+                mutable: *mutable,
+                inner: Box::new(Self::ast_type(inner)),
+            },
+        }
+    }
+    fn emit_lvalue(&mut self, expr: &Expr) -> Result<(String, SemanticType), CodegenError> {
+        match expr {
+            Expr::Name(name) => self
+                .locals
+                .get(name)
+                .map(|l| (l.ptr.clone(), l.ty.clone()))
+                .ok_or_else(|| CodegenError {
+                    message: format!("no local storage for `{name}`"),
+                }),
+            Expr::Unary {
+                op: UnaryOp::Deref,
+                expr,
+            } => {
+                let (pointer, ty) = self.emit_expr(expr)?;
+                match ty {
+                    SemanticType::Reference { inner, .. } => Ok((pointer, *inner)),
+                    _ => Err(CodegenError {
+                        message: "dereference requires a reference".into(),
+                    }),
+                }
+            }
+            _ => Err(CodegenError {
+                message: "reference target must be a local or dereference".into(),
+            }),
         }
     }
     fn emit_expr(&mut self, expr: &Expr) -> Result<(String, SemanticType), CodegenError> {
         match expr {
+            Expr::Borrow { mutable, expr } => {
+                let (address, inner) = self.emit_lvalue(expr)?;
+                Ok((
+                    address,
+                    SemanticType::Reference {
+                        mutable: *mutable,
+                        inner: Box::new(inner),
+                    },
+                ))
+            }
             Expr::Int(_) => Ok((
                 match expr {
                     Expr::Int(value) => value.clone(),
@@ -1644,6 +1780,9 @@ impl LlvmCodegen {
                 let local = self.locals.get(name).cloned().ok_or_else(|| CodegenError {
                     message: format!("no local storage for `{name}`"),
                 })?;
+                if matches!(local.ty, SemanticType::Reference { .. }) {
+                    return Ok((local.ptr, local.ty));
+                }
                 let value = self.next_temp();
                 self.output.push_str(&format!(
                     "  {value} = load {}, ptr {}\n",
@@ -1653,6 +1792,19 @@ impl LlvmCodegen {
                 Ok((value, local.ty))
             }
             Expr::Unary { op, expr } => {
+                if matches!(op, UnaryOp::Deref) {
+                    let (pointer, SemanticType::Reference { inner, .. }) = self.emit_expr(expr)?
+                    else {
+                        return Err(CodegenError {
+                            message: "dereference requires a reference".into(),
+                        });
+                    };
+                    let result = self.next_temp();
+                    let llvm_ty = Self::llvm_type(&inner)?;
+                    self.output
+                        .push_str(&format!("  {result} = load {llvm_ty}, ptr {pointer}\n"));
+                    return Ok((result, *inner));
+                }
                 let (value, ty) = self.emit_expr(expr)?;
                 let result = self.next_temp();
                 match op {
@@ -1676,6 +1828,7 @@ impl LlvmCodegen {
                     UnaryOp::Not => self
                         .output
                         .push_str(&format!("  {result} = xor i1 {value}, true\n")),
+                    UnaryOp::Deref => unreachable!(),
                 }
                 Ok((result, ty))
             }
@@ -1792,6 +1945,26 @@ impl LlvmCodegen {
             Expr::Assign { left, right } => {
                 let (value, ty) = self.emit_expr(right)?;
                 match left.as_ref() {
+                    Expr::Unary {
+                        op: UnaryOp::Deref,
+                        expr,
+                    } => {
+                        let (pointer, ref_ty) = self.emit_expr(expr)?;
+                        let SemanticType::Reference { inner, mutable } = ref_ty else {
+                            return Err(CodegenError {
+                                message: "assignment target is not a reference".into(),
+                            });
+                        };
+                        if !mutable {
+                            return Err(CodegenError {
+                                message: "cannot assign through a shared reference".into(),
+                            });
+                        }
+                        let llvm_ty = Self::llvm_type(&inner)?;
+                        self.output
+                            .push_str(&format!("  store {llvm_ty} {value}, ptr {pointer}\n"));
+                        Ok((value, ty))
+                    }
                     Expr::Name(name) => {
                         let local = self.locals.get(name).cloned().ok_or_else(|| CodegenError {
                             message: format!("no local storage for `{name}`"),
@@ -1923,12 +2096,17 @@ impl LlvmCodegen {
                         .push_str(&format!("  call i32 @puts({})\n", rendered.join(", ")));
                     return Ok(("0".into(), SemanticType::Unit));
                 }
-                let signature_return = if name == "main" {
-                    SemanticType::I32
-                } else {
-                    SemanticType::I32
-                };
+                let signature_return = self
+                    .function_returns
+                    .get(name)
+                    .cloned()
+                    .unwrap_or(SemanticType::I32);
                 let result_ty = Self::llvm_type(&signature_return)?;
+                if signature_return == SemanticType::Unit {
+                    self.output
+                        .push_str(&format!("  call void @{name}({})\n", rendered.join(", ")));
+                    return Ok(("0".into(), SemanticType::Unit));
+                }
                 let result = self.next_temp();
                 self.output.push_str(&format!(
                     "  {result} = call {result_ty} @{name}({})\n",
@@ -2276,17 +2454,17 @@ impl LlvmCodegen {
         for (name, ty) in &function.params {
             let semantic_ty = Self::ast_type(ty);
             let llvm_ty = Self::llvm_type(&semantic_ty)?;
-            let ptr = self.next_temp();
-            self.output.push_str(&format!(
-                "  {ptr} = alloca {llvm_ty}\n  store {llvm_ty} %arg_{name}, ptr {ptr}\n"
-            ));
-            self.locals.insert(
-                name.clone(),
-                Local {
-                    ptr,
-                    ty: semantic_ty,
-                },
-            );
+            let (ptr, local_ty) = if let SemanticType::Reference { .. } = &semantic_ty {
+                (format!("%arg_{name}"), semantic_ty.clone())
+            } else {
+                let ptr = self.next_temp();
+                self.output.push_str(&format!(
+                    "  {ptr} = alloca {llvm_ty}\n  store {llvm_ty} %arg_{name}, ptr {ptr}\n"
+                ));
+                (ptr, semantic_ty.clone())
+            };
+            self.locals
+                .insert(name.clone(), Local { ptr, ty: local_ty });
         }
         let mut terminated = false;
         for stmt in &function.body.statements {
@@ -2342,6 +2520,18 @@ pub fn generate_llvm(program: &Program) -> Result<String, CodegenError> {
         .any(|item| matches!(item, Item::Struct(_)))
     {
         codegen.output.push('\n');
+    }
+    for item in &program.items {
+        if let Item::Function(function) = item {
+            let return_type = function
+                .return_type
+                .as_ref()
+                .map(LlvmCodegen::ast_type)
+                .unwrap_or(SemanticType::Unit);
+            codegen
+                .function_returns
+                .insert(function.name.clone(), return_type);
+        }
     }
     for item in &program.items {
         if let Item::Function(function) = item {

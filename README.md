@@ -2,7 +2,21 @@
 
 Vāk is an experimental, statically typed systems-language compiler written in Rust. It translates Vāk source code into validated LLVM IR and can build native executables through Clang.
 
-The repository is designed for two audiences. A learner can start with the quick-start commands and the language tutorial. A compiler engineer can continue into the architecture, ownership plan, runtime contract, LLVM inspection report, and milestone status documents.
+## Website source and self-hosting
+
+The Vāk website is maintained as a separate, dependency-light React/Vite repository so it can be uploaded to a private repository and deployed independently on Cloudflare Pages:
+
+- **Local website source handoff:** `/home/ubuntu/projects/v-k-d353fe15/vak-website-source/`
+- **Private website repository:** add its URL here after upload
+- **Cloudflare Pages URL:** add the deployed `pages.dev` or custom-domain URL here after deployment
+
+The website source has no Manus analytics, debug collector, Manus storage proxy, generated Manus markers, server requirement, or paid-service dependency. See its `README.md` for the exact Cloudflare Pages settings.
+
+## Learn Vāk in the browser
+
+The repository includes a zero-dependency learner-facing documentation site in [`docs-site/`](docs-site/). Preview it with `python3 -m http.server 8080 --directory docs-site`; it is ready to deploy as a static Cloudflare Pages site. The site is an orientation layer over the authoritative [`LANGUAGE.md`](LANGUAGE.md), [`TUTORIAL.md`](TUTORIAL.md), and [`PROJECT_STATUS.md`](PROJECT_STATUS.md) documents.
+
+The repository is designed for two audiences. A learner can start with the quick-start commands and the language tutorial. A compiler engineer can continue into the architecture, ownership plan, runtime contract, LLVM inspection report, [the browser playground security plan](PLAYGROUND_PLAN.md), and milestone status documents.
 
 > Vāk is a serious compiler foundation, not a finished production language. The current implementation is intentionally explicit about what is implemented and what remains planned.
 
@@ -28,16 +42,16 @@ The current compiler supports the following language and compiler features:
 |---|---|
 | Frontend | Lexer, source spans, parser, AST, syntax diagnostics |
 | Semantics | Name resolution, lexical scopes, type checking, mutability checks |
-| Safety | Definite initialization, `if`-branch initialization joins, I32 literal range checks, fixed-array runtime bounds traps |
+| Safety | Definite initialization, `if`-branch initialization joins, I32 literal range checks, fixed-array runtime bounds traps, explicit shared/mutable references, shared-reference mutation rejection, reference-return rejection |
 | Control flow | `if`, `else`, `while`, `for start..end`, `break`, `continue`, `return` |
-| Data | `Bool`, `I32`, `U32`, `U64`, `F64`, `String`, fixed arrays, simple structs |
+| Data | `Bool`, `I32`, `U32`, `U64`, `F64`, `String`, fixed arrays, simple structs, `&T` and `&mut T` reference parameters |
 | Backend | Textual LLVM IR generation, LLVM validation, Clang native builds |
 | Runtime slice | String literals and `print(String)` through libc `puts` |
-| Tests | Rust unit tests, integration tests, LLVM assembly validation, native examples |
+| Tests | Rust unit tests, integration tests, native reference tests, LLVM assembly validation, native examples |
 
-Ownership, borrowing, pointers, lifetimes, destruction, modules, a complete runtime library, generics, FFI, and production tooling remain planned. See [PROJECT_STATUS.md](PROJECT_STATUS.md) for the current completion estimate.
+Move semantics, lexical borrow regions, pointers, lifetimes, destruction, modules, a complete runtime library, generics, FFI, and production tooling remain planned. The first explicit reference slice is implemented and documented in [OWNERSHIP_BORROWING_PLAN.md](OWNERSHIP_BORROWING_PLAN.md). See [PROJECT_STATUS.md](PROJECT_STATUS.md) for the current completion estimate.
 
-## Quick start on Linux or macOS
+## Quick start on Linux, macOS, or Windows
 
 ### 1. Install prerequisites
 
@@ -65,7 +79,7 @@ brew install rust llvm
 
 Install Clang if it is not already available through Xcode Command Line Tools. If Homebrew LLVM is not on your `PATH`, follow Homebrew's printed instructions or export its `bin` directory.
 
-Windows is not yet a first-class supported build environment. The recommended approach is Ubuntu through WSL2, then follow the Linux instructions.
+Windows is covered by CI with the LLVM/Clang toolchain. Install the Rust stable toolchain and LLVM/Clang through the official installers or Chocolatey, then run the same Cargo commands from PowerShell. The first Windows release should still be validated on a native runner before distribution.
 
 ### 2. Obtain the repository
 

@@ -45,7 +45,7 @@ The following are intentionally deferred and should not be described as implemen
 1. Richer string operations and richer aggregate value semantics.
 2. A runtime or standard library.
 3. Modules and imports.
-4. Pointers, references, slices, ownership, destruction, lifetimes, and unsafe operations.
+4. Move semantics, lexical borrow regions, pointers, slices, ownership, destruction, lifetimes, and unsafe operations beyond the initial explicit-reference slice.
 5. C ABI declarations and linking.
 6. C++ interoperability tooling.
 7. Executable fuzzing infrastructure; preparation guidance and corpus planning now exist.
@@ -68,11 +68,18 @@ The explicitly enumerated Milestones 0 through 5 are implemented for their docum
 ```text
 Overall Vāk project          [█████████████░░░░░░░] 68%
 Milestones 0–5               [████████████████████] 100%
-Memory safety                [███████░░░░░░░░░░░░░] 35%
+Memory safety                [█████████░░░░░░░░░░░] 45%
 Learner documentation        [███████████████████░] 95%
-LLVM/native verification     [███████████████████░] 95%
+LLVM/native verification     [████████████████████] 100%
 ```
 
 ## GitHub upload note
 
 The archive produced alongside this document contains source, documentation, examples, tests, Cargo metadata, and repository hygiene files. It excludes `.git`, `target`, generated binaries, and temporary files. Before publishing, create an initial GitHub commit with the project history and a CI workflow.
+
+
+## Current follow-up milestone
+
+The first explicit-reference slice is implemented: `&T` and `&mut T` types, local borrows, dereference reads, mutable dereference assignment, reference parameters, shared-reference mutation diagnostics, and reference-return rejection. The native reference example is `examples/references.vak`, with integration coverage in `tests/references.rs`. Cross-platform CI now targets Linux, macOS, and Windows and validates both `llvm-as` and Clang native output.
+
+The live browser playground is intentionally not enabled yet. Its secure implementation contract, including the WebAssembly and isolated-service alternatives, is documented in [`PLAYGROUND_PLAN.md`](PLAYGROUND_PLAN.md).

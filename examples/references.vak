@@ -1,0 +1,13 @@
+fn update(value: &mut I32) {
+  *value = *value + 1;
+}
+
+fn read(value: &I32) -> I32 {
+  return *value;
+}
+
+fn main() -> I32 {
+  let mut total: I32 = 41;
+  update(&mut total);
+  return read(&total);
+}
